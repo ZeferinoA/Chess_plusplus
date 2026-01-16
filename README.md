@@ -1,2 +1,2 @@
-# Chess-Project
-Chess app for CS362 Project
+# Chess++
+Chess++ app for CS362 Project
