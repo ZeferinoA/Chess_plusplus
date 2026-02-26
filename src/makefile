@@ -2,7 +2,7 @@
 CXX = g++
 CXXFLAGS = -std=c++11 -Wall
 TARGET = chess_game
-SOURCES = main.cpp Board.cpp
+SOURCES = main.cpp Board.cpp Tutorial.cpp
 OBJECTS = $(SOURCES:.cpp=.o)
 
 # Default build (release)
