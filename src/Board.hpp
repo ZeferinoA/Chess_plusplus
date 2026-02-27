@@ -9,7 +9,6 @@ private:
     static const int COLS = 9;
     std::string grid[ROWS][COLS];
 
-    void movePiece(int s_col, int s_row, int m_col, int m_row);
     void selectPiece(int col, int row);
 
 public:
@@ -17,6 +16,8 @@ public:
     void display() const;
     void receiveInputs();
     void clearBoard();
+    void setPiece(int col, int row, const std::string &piece);
+    void movePiece(int s_col, int s_row, int m_col, int m_row);
 };
 
 #endif

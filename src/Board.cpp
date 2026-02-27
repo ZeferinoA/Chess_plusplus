@@ -96,3 +96,9 @@ void Board::clearBoard() {
         }
     }
 }
+
+void Board::setPiece(int col, int row, const std::string &piece) {
+    if (col >= 1 && col <= 8 && row >= 1 && row <= 8) {
+        grid[row][col] = piece;
+    }
+}
