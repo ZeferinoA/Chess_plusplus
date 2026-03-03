@@ -1,18 +1,14 @@
-#include "Board.hpp"
+#include "Menu.h"
 #include <iostream>
 
 int main() {
-    Board board;
-    int turn = 0;
-
-    do {
-        board.display();
-        
-        std::cout << "Player " << turn + 1 << ": ";
-        board.receiveInputs();
-        
-        turn = (turn == 0) ? 1 : 0;
-    } while (true);
-
+    try {
+        Menu menu;
+        menu.run();
+    } catch (const std::exception& e) {
+        std::cerr << "Fatal error: " << e.what() << std::endl;
+        return 1;
+    }
+    
     return 0;
 }
