@@ -1,3 +1,5 @@
+#include "../catch2/catch_amalgamated.hpp"
+
 TEST_CASE("Move disambiguation", "[notation]") {
     ChessGame game;
     

@@ -1,4 +1,6 @@
-TEST_CASE("Invalid moves", [invalid]") {
+#include "../catch2/catch_amalgamated.hpp"
+
+TEST_CASE("Invalid moves", "[invalid]") {
     ChessGame game;
     
     // Moving through pieces
