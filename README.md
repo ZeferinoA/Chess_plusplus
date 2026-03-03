@@ -5,3 +5,6 @@ This program will simulate a chess game for beginners and advanced players who w
 
 ## Goal
 The goal is to teach users how to play chess, create new pieces and new ways to play, and allow for local server 2 player connectivity or single player games to improve with oneself.
+
+## Run Instructions:
+'Make Run' will compile the files and run it once
