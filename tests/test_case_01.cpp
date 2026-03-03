@@ -1,3 +1,6 @@
+#define CATCH_CONFIG_MAIN
+#include "../catch2/catch_amalgamated.hpp"
+
 TEST_CASE("Basic pawn moves", "[movement]") {
     ChessGame game;
     
