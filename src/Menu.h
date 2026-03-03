@@ -35,14 +35,25 @@ private:
         bool isAdvanced;
     };
     
+    struct FenLesson {
+        std::string title;
+        std::string description;
+        std::string question;
+        std::string expectedAnswer;
+        std::string hint;
+        std::string exampleFen;
+    };
+    
     std::vector<Lesson> beginnerLessons;
     std::vector<Lesson> advancedLessons;
+    std::vector<FenLesson> fenLessons;
     int currentLessonIndex;
     
     void displayHeader();
     void displayMainMenu();
     void displayGameMenu();
     void displayLessonMenu();
+    void displayFenLessonMenu();
     void displayBoard(const std::string& fen);
     std::string getStockfishPath();
     
@@ -55,11 +66,15 @@ private:
     
     // New methods for lessons and custom pieces
     void initializeLessons();
+    void initializeFenLessons();
     void showLessonMenu();
     void startBeginnerLessons();
     void startAdvancedLessons();
+    void startFenLessons();
     void runLesson(const Lesson& lesson);
+    void runFenLesson(const FenLesson& lesson);
     bool checkLessonMove(const std::string& move, const std::string& expected);
+    bool checkFenAnswer(const std::string& answer, const std::string& expected);
     
     // Custom piece methods
     void showCustomPieceMenu();
