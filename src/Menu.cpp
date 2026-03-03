@@ -7,6 +7,8 @@
 #include <cctype>
 #include <memory>
 #include <map>
+#include <thread>
+#include <chrono>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -28,8 +30,17 @@ namespace std {
     }
 }
 
-Menu::Menu() : currentFen(INITIAL_FEN), gameActive(false), customPiecesEnabled(false), currentLessonIndex(0) {
+Menu::Menu() : 
+    engine(nullptr),
+    currentFen(INITIAL_FEN), 
+    lastMove(""),
+    gameActive(false), 
+    customPiecesEnabled(false),
+    currentDifficulty(MEDIUM),
+    engineMoveTimeMs(1000),
+    currentLessonIndex(0) {
     initializeLessons();
+    initializeFenLessons();
 }
 
 Menu::~Menu() = default;
@@ -140,6 +151,150 @@ void Menu::initializeLessons() {
     };
 }
 
+void Menu::initializeFenLessons() {
+    fenLessons = {
+        {
+            "FEN Structure - Basic Components",
+            "FEN (Forsyth-Edwards Notation) is a standard notation for describing chess positions. "
+            "It consists of 6 fields separated by spaces:\n"
+            "1. Piece placement (from rank 8 to 1)\n"
+            "2. Active color (w or b)\n"
+            "3. Castling availability (KQkq or -)\n"
+            "4. En passant target square (or -)\n"
+            "5. Halfmove clock\n"
+            "6. Fullmove number\n\n"
+            "Example: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            
+            "How many fields are in a FEN string?",
+            "6",
+            "Count the parts separated by spaces in the example.",
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+        },
+        {
+            "Piece Placement - Ranks and Files",
+            "The first field shows piece placement from rank 8 to rank 1. "
+            "Uppercase letters = White pieces, lowercase = Black pieces.\n"
+            "P/p = Pawn, N/n = Knight, B/b = Bishop, R/r = Rook, Q/q = Queen, K/k = King\n"
+            "Numbers represent consecutive empty squares.\n"
+            "Slashes (/) separate ranks.\n\n"
+            "Example: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR'",
+            
+            "In the initial position, how many empty squares are on rank 6?",
+            "8",
+            "Look at the third field: '8' represents 8 empty squares on rank 6.",
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
+        },
+        {
+            "Reading Piece Placement",
+            "Each character represents a piece or empty square count.\n"
+            "Let's decode: 'r' = black rook, 'n' = black knight, 'b' = black bishop, etc.",
+            
+            "What piece does 'Q' represent in FEN notation?",
+            "white queen",
+            "Uppercase letters are White pieces, lowercase are Black. Q = Queen.",
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
+        },
+        {
+            "Active Color",
+            "The second field indicates which player's turn it is: 'w' for White, 'b' for Black.",
+            
+            "In the FEN 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 4', whose turn is it?",
+            "white",
+            "The 'w' after the board position means White to move.",
+            "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 4"
+        },
+        {
+            "Castling Rights",
+            "The third field shows castling availability:\n"
+            "K = White kingside, Q = White queenside\n"
+            "k = Black kingside, q = Black queenside\n"
+            "- = No castling available",
+            
+            "In 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', what castling rights exist?",
+            "both sides can castle on both wings",
+            "KQ means White can castle both sides, kq means Black can castle both sides.",
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+        },
+        {
+            "En Passant Target",
+            "The fourth field shows the en passant target square (or '-' if none). "
+            "This square is behind a pawn that just moved two squares.",
+            
+            "In 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1', what is the en passant target?",
+            "e3",
+            "The square after 'e3' indicates en passant is available on e3.",
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"
+        },
+        {
+            "Halfmove and Fullmove Counters",
+            "The fifth field is the halfmove clock (moves since last pawn move or capture).\n"
+            "The sixth field is the fullmove number (starts at 1 and increments after Black's move).",
+            
+            "In 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', what is the fullmove number?",
+            "1",
+            "The last number is the fullmove counter.",
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+        },
+        {
+            "Reading a Complete FEN",
+            "Now let's read a complete FEN: "
+            "'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 4'",
+            
+            "After 1.e4 e5 2.Nf3 Nc6, what is the active color?",
+            "white",
+            "The 'w' after the board tells us it's White's turn.",
+            "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 4"
+        },
+        {
+            "Creating Your Own FEN - Part 1",
+            "Create a FEN for an empty board (no pieces).\n"
+            "Hint: 8 ranks, each with 8 empty squares.",
+            
+            "What is the piece placement string for an empty board?",
+            "8/8/8/8/8/8/8/8",
+            "Each rank is represented by '8' for 8 empty squares, separated by slashes.",
+            "8/8/8/8/8/8/8/8 w - - 0 1"
+        },
+        {
+            "Creating Your Own FEN - Part 2",
+            "Create a FEN for a position with:\n"
+            "- White king on e1\n"
+            "- White pawn on e2\n"
+            "- Black king on e8\n"
+            "- Black pawn on e7\n"
+            "All other squares empty. It's White's turn.",
+            
+            "Write the complete FEN string:",
+            "8/4k3/8/8/8/8/4P3/4K3 w - - 0 1",
+            "Rank 8: '4k3' (4 empty, black king, 3 empty)\n"
+            "Rank 7: '8' (all empty)\n"
+            "Rank 2: '4P3' (4 empty, white pawn, 3 empty)\n"
+            "Rank 1: '4K3' (4 empty, white king, 3 empty)",
+            "8/4k3/8/8/8/8/4P3/4K3 w - - 0 1"
+        },
+        {
+            "Practical Application - Reading Positions",
+            "Look at this FEN: '8/5k2/8/3K4/8/8/8/8 w - - 0 1'\n"
+            "Where are the kings?",
+            
+            "Where is the white king?",
+            "d5",
+            "K at position d5 means white king on d5. '3K4' in rank 4 means: 3 empty, King, 4 empty.",
+            "8/5k2/8/3K4/8/8/8/8 w - - 0 1"
+        },
+        {
+            "Advanced FEN - Castling Rights",
+            "In this position: 'r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1'\n"
+            "What castling rights exist?",
+            
+            "Can White castle queenside?",
+            "yes",
+            "'KQ' in the castling field means White can castle both sides. Q = queenside.",
+            "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1"
+        }
+    };
+}
+
 void Menu::displayHeader() {
     std::cout << "\n" << std::string(50, '=') << std::endl;
     std::cout << "        TERMINAL CHESS ENGINE - STOCKFISH" << std::endl;
@@ -226,25 +381,48 @@ void Menu::displayBoard(const std::string& fen) {
     if (!lastMove.empty()) {
         std::cout << "Last move: " << lastMove << std::endl;
     }
+    
+    // Show difficulty if playing vs engine
+    std::string diffStr;
+    switch (currentDifficulty) {
+        case BEGINNER: diffStr = "Beginner"; break;
+        case EASY: diffStr = "Easy"; break;
+        case MEDIUM: diffStr = "Medium"; break;
+        case HARD: diffStr = "Hard"; break;
+        case EXPERT: diffStr = "Expert"; break;
+    }
+    std::cout << "Difficulty: " << diffStr << std::endl;
 }
 
 void Menu::displayMainMenu() {
     std::cout << "\nMAIN MENU:" << std::endl;
-    std::cout << "1. New Game (Play vs Engine)" << std::endl;
-    std::cout << "2. Set Custom Position" << std::endl;
-    std::cout << "3. Analyze Position" << std::endl;
-    std::cout << "4. Engine Info" << std::endl;
-    std::cout << "5. Lessons" << std::endl;
-    std::cout << "6. Custom Pieces" << std::endl;
-    std::cout << "7. Local Game (with Custom Pieces)" << std::endl;
-    std::cout << "8. Exit" << std::endl;
+    std::cout << "1. Play vs Computer (Engine)" << std::endl;
+    std::cout << "2. Local PvP (2 Players)" << std::endl;
+    std::cout << "3. Set Custom Position" << std::endl;
+    std::cout << "4. Analyze Position" << std::endl;
+    std::cout << "5. Engine Info" << std::endl;
+    std::cout << "6. Lessons" << std::endl;
+    std::cout << "7. Custom Pieces" << std::endl;
+    std::cout << "8. Local Game (with Custom Pieces)" << std::endl;
+    std::cout << "9. Set Difficulty" << std::endl;
+    std::cout << "10. Exit" << std::endl;
+    std::cout << "\nChoice: ";
+}
+
+void Menu::displayVsEngineMenu() {
+    std::cout << "\nVS COMPUTER MENU:" << std::endl;
+    std::cout << "1. Make Your Move" << std::endl;
+    std::cout << "2. Show Legal Moves" << std::endl;
+    std::cout << "3. New Game" << std::endl;
+    std::cout << "4. Change Difficulty" << std::endl;
+    std::cout << "5. Back to Main Menu" << std::endl;
     std::cout << "\nChoice: ";
 }
 
 void Menu::displayGameMenu() {
-    std::cout << "\nGAME MENU:" << std::endl;
+    std::cout << "\nLOCAL PVP MENU:" << std::endl;
     std::cout << "1. Make Move" << std::endl;
-    std::cout << "2. Get Engine Move" << std::endl;
+    std::cout << "2. Get Engine Suggestion" << std::endl;
     std::cout << "3. Analyze Current Position" << std::endl;
     std::cout << "4. Show Legal Moves" << std::endl;
     std::cout << "5. New Game" << std::endl;
@@ -252,22 +430,43 @@ void Menu::displayGameMenu() {
     std::cout << "\nChoice: ";
 }
 
-void Menu::displayLessonMenu() {
-    std::cout << "\nLESSON MENU:" << std::endl;
-    std::cout << "1. Beginner Lessons" << std::endl;
-    std::cout << "2. Advanced Lessons (Openings & Book Moves)" << std::endl;
-    std::cout << "3. Back to Main Menu" << std::endl;
+void Menu::displayDifficultyMenu() {
+    std::cout << "\n=== DIFFICULTY SETTINGS ===" << std::endl;
+    std::cout << "Current difficulty: ";
+    switch (currentDifficulty) {
+        case BEGINNER: std::cout << "Beginner"; break;
+        case EASY: std::cout << "Easy"; break;
+        case MEDIUM: std::cout << "Medium"; break;
+        case HARD: std::cout << "Hard"; break;
+        case EXPERT: std::cout << "Expert"; break;
+    }
+    std::cout << " (" << engineMoveTimeMs << "ms thinking time)" << std::endl;
+    std::cout << "\nSelect difficulty:" << std::endl;
+    std::cout << "1. Beginner (very weak, fast responses)" << std::endl;
+    std::cout << "2. Easy (weak)" << std::endl;
+    std::cout << "3. Medium (moderate)" << std::endl;
+    std::cout << "4. Hard (strong)" << std::endl;
+    std::cout << "5. Expert (very strong, slower)" << std::endl;
+    std::cout << "6. Back" << std::endl;
     std::cout << "\nChoice: ";
 }
 
-void Menu::newGame() {
-    currentFen = INITIAL_FEN;
-    lastMove = "";
-    gameActive = true;
-    
-    std::cout << "\nStarting new game..." << std::endl;
-    displayBoard(currentFen);
-    playAgainstEngine();
+void Menu::displayLessonMenu() {
+    std::cout << "\n=== LESSON MENU ===" << std::endl;
+    std::cout << "1. Beginner Lessons (Piece Movement)" << std::endl;
+    std::cout << "2. Advanced Lessons (Openings & Book Moves)" << std::endl;
+    std::cout << "3. FEN Notation Lessons (Read & Write Positions)" << std::endl;
+    std::cout << "4. Back to Main Menu" << std::endl;
+    std::cout << "\nChoice: ";
+}
+
+void Menu::displayFenLessonMenu() {
+    std::cout << "\nFEN NOTATION LESSONS:" << std::endl;
+    std::cout << "Learn to read and write Forsyth-Edwards Notation (FEN)" << std::endl;
+    std::cout << "Total lessons: " << fenLessons.size() << std::endl;
+    std::cout << "\n1. Start FEN Lessons" << std::endl;
+    std::cout << "2. Back to Lesson Menu" << std::endl;
+    std::cout << "\nChoice: ";
 }
 
 std::string Menu::getStockfishPath() {
@@ -278,24 +477,224 @@ std::string Menu::getStockfishPath() {
 #endif
 }
 
-void Menu::playAgainstEngine() {
+void Menu::setDifficulty() {
+    int choice;
+    do {
+        displayDifficultyMenu();
+        std::cin >> choice;
+        std::cin.ignore();
+        
+        switch (choice) {
+            case 1:
+                currentDifficulty = BEGINNER;
+                engineMoveTimeMs = 100;
+                std::cout << "\nDifficulty set to Beginner (100ms thinking time)" << std::endl;
+                break;
+            case 2:
+                currentDifficulty = EASY;
+                engineMoveTimeMs = 250;
+                std::cout << "\nDifficulty set to Easy (250ms thinking time)" << std::endl;
+                break;
+            case 3:
+                currentDifficulty = MEDIUM;
+                engineMoveTimeMs = 500;
+                std::cout << "\nDifficulty set to Medium (500ms thinking time)" << std::endl;
+                break;
+            case 4:
+                currentDifficulty = HARD;
+                engineMoveTimeMs = 1000;
+                std::cout << "\nDifficulty set to Hard (1000ms thinking time)" << std::endl;
+                break;
+            case 5:
+                currentDifficulty = EXPERT;
+                engineMoveTimeMs = 2000;
+                std::cout << "\nDifficulty set to Expert (2000ms thinking time)" << std::endl;
+                break;
+            case 6:
+                return;
+            default:
+                std::cout << "Invalid choice!" << std::endl;
+        }
+        
+        // Apply skill level to engine if it's running
+        if (engine && engine->isEngineRunning()) {
+            // Set UCI_Elo or skill level based on difficulty
+            int skillLevel;
+            switch (currentDifficulty) {
+                case BEGINNER: skillLevel = 0; break;
+                case EASY: skillLevel = 5; break;
+                case MEDIUM: skillLevel = 10; break;
+                case HARD: skillLevel = 15; break;
+                case EXPERT: skillLevel = 20; break;
+                default: skillLevel = 10;
+            }
+            engine->sendCommand("setoption name Skill Level value " + std::to_string(skillLevel));
+        }
+    } while (choice != 6);
+}
+
+void Menu::newGame() {
+    currentFen = INITIAL_FEN;
+    lastMove = "";
+    gameActive = true;
+    
+    std::cout << "\nStarting new game..." << std::endl;
+    displayBoard(currentFen);
+}
+
+void Menu::playVsEngine() {
     if (!engine) {
         std::string path = getStockfishPath();
         
         std::cout << "Starting engine from: " << path << "..." << std::endl;
         
-        // Use explicit unique_ptr construction
         engine = std::unique_ptr<ChessEngine>(new ChessEngine(path));
         
         if (!engine->start()) {
             std::cout << "Failed to start Stockfish at: " << path << std::endl;
             std::cout << "Please make sure Stockfish is installed in the 'stockfish' directory." << std::endl;
             engine.reset();
-            gameActive = false;
             return;
         }
+        
+        // Set initial skill level
+        int skillLevel;
+        switch (currentDifficulty) {
+            case BEGINNER: skillLevel = 0; break;
+            case EASY: skillLevel = 5; break;
+            case MEDIUM: skillLevel = 10; break;
+            case HARD: skillLevel = 15; break;
+            case EXPERT: skillLevel = 20; break;
+            default: skillLevel = 10;
+        }
+        engine->sendCommand("setoption name Skill Level value " + std::to_string(skillLevel));
+        
         std::cout << "Engine started successfully!" << std::endl;
     }
+    
+    newGame();
+    
+    while (gameActive) {
+        displayBoard(currentFen);
+        
+        // Check if game is over
+        auto legalMoves = engine->getLegalMoves(currentFen);
+        if (legalMoves.empty()) {
+            std::cout << "\nGame Over! No legal moves available." << std::endl;
+            break;
+        }
+        
+        // Determine whose turn it is
+        size_t spacePos = currentFen.find(' ');
+        std::string turn = (spacePos != std::string::npos) ? currentFen.substr(spacePos + 1, 1) : "w";
+        
+        if (turn == "w") {
+            // Player's turn (White)
+            std::cout << "\nYour turn (White)." << std::endl;
+            displayVsEngineMenu();
+            
+            int choice;
+            std::cin >> choice;
+            std::cin.ignore();
+            
+            switch (choice) {
+                case 1: {
+                    // Make player move
+                    std::cout << "\nEnter your move (e.g., e2e4) or 'q' to cancel: ";
+                    std::string move;
+                    std::getline(std::cin, move);
+                    
+                    if (move == "q" || move == "Q") {
+                        std::cout << "Move cancelled." << std::endl;
+                        continue;
+                    }
+                    
+                    // Check if move is legal
+                    bool isLegal = false;
+                    for (const auto& legalMove : legalMoves) {
+                        if (legalMove == move) {
+                            isLegal = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!isLegal) {
+                        std::cout << "\nInvalid move! Legal moves: ";
+                        for (const auto& legalMove : legalMoves) {
+                            std::cout << legalMove << " ";
+                        }
+                        std::cout << std::endl;
+                        std::cout << "Press Enter to continue...";
+                        std::cin.get();
+                        continue;
+                    }
+                    
+                    // Apply player move
+                    std::string newFen = engine->makeMove(currentFen, move);
+                    if (newFen != currentFen) {
+                        lastMove = move;
+                        currentFen = newFen;
+                        std::cout << "\nMove applied!" << std::endl;
+                    }
+                    break;
+                }
+                case 2:
+                    std::cout << "\nLegal moves: ";
+                    for (const auto& move : legalMoves) {
+                        std::cout << move << " ";
+                    }
+                    std::cout << std::endl;
+                    std::cout << "Press Enter to continue...";
+                    std::cin.get();
+                    break;
+                case 3:
+                    newGame();
+                    break;
+                case 4:
+                    setDifficulty();
+                    break;
+                case 5:
+                    gameActive = false;
+                    break;
+                default:
+                    std::cout << "Invalid choice!" << std::endl;
+            }
+        } else {
+            // Engine's turn (Black)
+            std::cout << "\nEngine is thinking";
+            for (int i = 0; i < 3; i++) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                std::cout << ".";
+                std::flush(std::cout);
+            }
+            std::cout << std::endl;
+            
+            std::string bestMove = engine->getBestMove(currentFen, engineMoveTimeMs);
+            
+            if (!bestMove.empty()) {
+                std::cout << "\nEngine plays: " << bestMove << std::endl;
+                
+                // Validate and apply the engine's move
+                if (engine->isValidMove(currentFen, bestMove)) {
+                    std::string newFen = engine->makeMove(currentFen, bestMove);
+                    if (newFen != currentFen) {
+                        lastMove = bestMove;
+                        currentFen = newFen;
+                        std::cout << "Engine move applied!" << std::endl;
+                    }
+                }
+            } else {
+                std::cout << "Engine couldn't find a move. Game may be over." << std::endl;
+            }
+            
+            std::cout << "\nPress Enter to continue...";
+            std::cin.get();
+        }
+    }
+}
+
+void Menu::playLocalPvp() {
+    newGame();
     
     while (gameActive) {
         displayBoard(currentFen);
@@ -310,44 +709,43 @@ void Menu::playAgainstEngine() {
                 inputMove();
                 break;
             case 2: {
-                std::cout << "\nCalculating best move..." << std::endl;
-                std::string bestMove = engine->getBestMove(currentFen, 2000);
+                if (!engine) {
+                    std::string path = getStockfishPath();
+                    engine = std::unique_ptr<ChessEngine>(new ChessEngine(path));
+                    if (!engine->start()) {
+                        std::cout << "Failed to start engine for suggestion." << std::endl;
+                        break;
+                    }
+                }
+                std::cout << "\nCalculating suggestion..." << std::endl;
+                std::string bestMove = engine->getBestMove(currentFen, 1000);
                 if (!bestMove.empty()) {
                     std::cout << "Engine suggests: " << bestMove << std::endl;
-                    std::cout << "Apply this move? (y/n): ";
-                    char apply;
-                    std::cin >> apply;
-                    std::cin.ignore();
-                    if (apply == 'y' || apply == 'Y') {
-                        // Validate and apply the engine's move
-                        if (engine->isValidMove(currentFen, bestMove)) {
-                            std::string newFen = engine->makeMove(currentFen, bestMove);
-                            if (newFen != currentFen) {
-                                lastMove = bestMove;
-                                currentFen = newFen;
-                                std::cout << "Engine move applied!" << std::endl;
-                            } else {
-                                std::cout << "Failed to apply engine move." << std::endl;
-                            }
-                        } else {
-                            std::cout << "Invalid move suggested by engine?" << std::endl;
-                        }
-                    }
-                } else {
-                    std::cout << "Could not get move from engine" << std::endl;
                 }
+                std::cout << "Press Enter to continue...";
+                std::cin.get();
                 break;
             }
             case 3:
                 analyzePosition();
                 break;
             case 4: {
+                if (!engine) {
+                    std::string path = getStockfishPath();
+                    engine = std::unique_ptr<ChessEngine>(new ChessEngine(path));
+                    if (!engine->start()) {
+                        std::cout << "Failed to start engine." << std::endl;
+                        break;
+                    }
+                }
                 auto moves = engine->getLegalMoves(currentFen);
                 std::cout << "\nLegal moves (" << moves.size() << "): ";
                 for (const auto& move : moves) {
                     std::cout << move << " ";
                 }
                 std::cout << std::endl;
+                std::cout << "Press Enter to continue...";
+                std::cin.get();
                 break;
             }
             case 5:
@@ -372,38 +770,23 @@ void Menu::inputMove() {
         return;
     }
     
-    // First, let's see what the engine returns for legal moves
-    std::cout << "Requesting legal moves from engine..." << std::endl;
+    if (!engine) {
+        std::string path = getStockfishPath();
+        engine = std::unique_ptr<ChessEngine>(new ChessEngine(path));
+        if (!engine->start()) {
+            std::cout << "Failed to start engine for move validation." << std::endl;
+            return;
+        }
+    }
+    
     auto legalMoves = engine->getLegalMoves(currentFen);
     
-    std::cout << "Engine returned " << legalMoves.size() << " legal moves." << std::endl;
-    
     if (legalMoves.empty()) {
-        std::cout << "No legal moves found. This could mean:" << std::endl;
-        std::cout << "1. Game is over" << std::endl;
-        std::cout << "2. Engine communication issue" << std::endl;
-        std::cout << "3. Position is invalid" << std::endl;
-        
-        // Let's try a direct command to see if engine is responding
-        std::cout << "\nTesting engine response..." << std::endl;
-        std::string response = engine->sendCommand("uci");
-        if (response.find("Stockfish") != std::string::npos) {
-            std::cout << "Engine is responding normally." << std::endl;
-        } else {
-            std::cout << "Engine may not be responding correctly." << std::endl;
-        }
-        
-        std::cout << "\nPress Enter to continue...";
+        std::cout << "No legal moves found. Game may be over." << std::endl;
+        std::cout << "Press Enter to continue...";
         std::cin.get();
         return;
     }
-    
-    // Show legal moves
-    std::cout << "\nLegal moves: ";
-    for (const auto& m : legalMoves) {
-        std::cout << m << " ";
-    }
-    std::cout << std::endl;
     
     // Check if user's move is legal
     bool found = false;
@@ -418,14 +801,18 @@ void Menu::inputMove() {
     }
     
     if (!found) {
-        std::cout << "Move '" << move << "' is not in the legal moves list." << std::endl;
+        std::cout << "Move '" << move << "' is not legal." << std::endl;
+        std::cout << "Legal moves: ";
+        for (const auto& legalMove : legalMoves) {
+            std::cout << legalMove << " ";
+        }
+        std::cout << std::endl;
         std::cout << "Press Enter to continue...";
         std::cin.get();
         return;
     }
     
     // Apply the move
-    std::cout << "Applying move: " << matchedMove << std::endl;
     std::string newFen = engine->makeMove(currentFen, matchedMove);
     
     if (newFen != currentFen) {
@@ -446,7 +833,6 @@ void Menu::analyzePosition() {
         
         std::cout << "Starting engine from: " << path << "..." << std::endl;
         
-        // Use explicit unique_ptr construction
         engine = std::unique_ptr<ChessEngine>(new ChessEngine(path));
         
         if (!engine->start()) {
@@ -477,6 +863,15 @@ void Menu::analyzePosition() {
             std::cout << "Evaluation: " << (pawns > 0 ? "+" : "") << pawns << " pawns" << std::endl;
         }
         
+        // Look for mate
+        size_t matePos = line.find("score mate");
+        if (matePos != std::string::npos) {
+            size_t valuePos = matePos + 11;
+            size_t valueEnd = line.find(' ', valuePos);
+            std::string mateIn = line.substr(valuePos, valueEnd - valuePos);
+            std::cout << "Evaluation: Mate in " << mateIn << std::endl;
+        }
+        
         size_t pvPos = line.find(" pv ");
         if (pvPos != std::string::npos) {
             std::cout << "Best line: " << line.substr(pvPos + 4) << std::endl;
@@ -484,6 +879,9 @@ void Menu::analyzePosition() {
         
         infoPos = analysis.find("info", endLine);
     }
+    
+    std::cout << "\nPress Enter to continue...";
+    std::cin.get();
 }
 
 void Menu::setCustomPosition() {
@@ -534,6 +932,19 @@ void Menu::viewEngineInfo() {
         size_t endLine = info.find('\n', idPos);
         std::cout << info.substr(idPos, endLine - idPos) << std::endl;
     }
+    
+    std::cout << "\nCurrent difficulty setting: ";
+    switch (currentDifficulty) {
+        case BEGINNER: std::cout << "Beginner"; break;
+        case EASY: std::cout << "Easy"; break;
+        case MEDIUM: std::cout << "Medium"; break;
+        case HARD: std::cout << "Hard"; break;
+        case EXPERT: std::cout << "Expert"; break;
+    }
+    std::cout << " (" << engineMoveTimeMs << "ms)" << std::endl;
+    
+    std::cout << "\nPress Enter to continue...";
+    std::cin.get();
 }
 
 void Menu::showLessonMenu() {
@@ -551,11 +962,14 @@ void Menu::showLessonMenu() {
                 startAdvancedLessons();
                 break;
             case 3:
+                startFenLessons();
+                break;
+            case 4:
                 return;
             default:
                 std::cout << "Invalid choice!" << std::endl;
         }
-    } while (choice != 3);
+    } while (choice != 4);
 }
 
 void Menu::startBeginnerLessons() {
@@ -592,6 +1006,29 @@ void Menu::startAdvancedLessons() {
     std::cin.get();
 }
 
+void Menu::startFenLessons() {
+    std::cout << "\n=== FEN NOTATION LESSONS ===" << std::endl;
+    std::cout << "You will learn how to read and write FEN strings.\n" << std::endl;
+    std::cout << "FEN (Forsyth-Edwards Notation) is the standard way to record chess positions.\n";
+    std::cout << "It's used in databases, engines, and for sharing positions.\n" << std::endl;
+    
+    for (size_t i = 0; i < fenLessons.size(); i++) {
+        std::cout << "\n" << std::string(50, '-') << std::endl;
+        std::cout << "Lesson " << (i + 1) << ": " << fenLessons[i].title << std::endl;
+        std::cout << std::string(50, '-') << std::endl;
+        std::cout << "Press Enter to continue...";
+        std::cin.get();
+        
+        runFenLesson(fenLessons[i]);
+    }
+    
+    std::cout << "\n" << std::string(50, '=') << std::endl;
+    std::cout << "Congratulations! You've completed all FEN notation lessons!" << std::endl;
+    std::cout << std::string(50, '=') << std::endl;
+    std::cout << "Press Enter to continue...";
+    std::cin.get();
+}
+
 void Menu::runLesson(const Lesson& lesson) {
     if (!engine) {
         std::string path = getStockfishPath();
@@ -605,29 +1042,45 @@ void Menu::runLesson(const Lesson& lesson) {
     std::string lessonFen = lesson.startFen;
     bool lessonComplete = false;
     int attempts = 0;
+    const int maxAttempts = 3;
     
-    while (!lessonComplete && attempts < 3) {
+    while (!lessonComplete && attempts < maxAttempts) {
         displayBoard(lessonFen);
         
         std::cout << "\n=== LESSON: " << lesson.title << " ===" << std::endl;
         std::cout << lesson.description << std::endl;
-        std::cout << "Hint: " << lesson.hint << std::endl;
         
-        std::cout << "\nEnter your move (or 'hint' for another hint, 'skip' to skip): ";
+        std::cout << "\nEnter your move (or 'hint' for help, 'skip' to skip): ";
         std::string move;
         std::getline(std::cin, move);
         
-        if (move == "skip") {
+        // Trim whitespace
+        move.erase(0, move.find_first_not_of(" \t\n\r"));
+        move.erase(move.find_last_not_of(" \t\n\r") + 1);
+        
+        // Convert to lowercase for command checking
+        std::string moveLower = move;
+        std::transform(moveLower.begin(), moveLower.end(), moveLower.begin(), ::tolower);
+        
+        if (moveLower == "skip") {
             std::cout << "Lesson skipped. The correct move was: " << lesson.expectedMove << std::endl;
             std::cout << "Press Enter to continue...";
             std::cin.get();
             return;
         }
         
-        if (move == "hint") {
-            std::cout << "Hint: " << lesson.hint << std::endl;
-            attempts++;
-            continue;
+        if (moveLower == "hint") {
+            if (attempts < maxAttempts - 1) {
+                std::cout << "\nHINT: " << lesson.hint << std::endl;
+                std::cout << "Attempts remaining: " << (maxAttempts - attempts - 1) << std::endl;
+                attempts++;
+                std::cout << "\nPress Enter to try again...";
+                std::cin.get();
+                continue;
+            } else {
+                std::cout << "\nNo more hints available. Try to make a move or type 'skip'." << std::endl;
+                continue;
+            }
         }
         
         // Check if move is legal
@@ -641,28 +1094,42 @@ void Menu::runLesson(const Lesson& lesson) {
         }
         
         if (!isLegal) {
-            std::cout << "\nInvalid move! Please enter a move in UCI format (e.g., e2e4)." << std::endl;
+            std::cout << "\nInvalid move! Please enter a legal move in UCI format (e.g., e2e4)." << std::endl;
             std::cout << "Legal moves: ";
             for (const auto& legalMove : legalMoves) {
                 std::cout << legalMove << " ";
             }
             std::cout << std::endl;
             attempts++;
+            
+            if (attempts < maxAttempts) {
+                std::cout << "Attempts remaining: " << (maxAttempts - attempts) << std::endl;
+                if (attempts == maxAttempts - 1) {
+                    std::cout << "Hint: " << lesson.hint << std::endl;
+                }
+            }
             continue;
         }
         
         // Check if it's the expected move
         if (checkLessonMove(move, lesson.expectedMove)) {
-            std::cout << "\nCorrect! Well done!" << std::endl;
+            std::cout << "\n✓ Correct! Well done!" << std::endl;
             lessonComplete = true;
             
             // Apply the move to show result
             std::string newFen = engine->makeMove(lessonFen, move);
             displayBoard(newFen);
         } else {
-            std::cout << "\nThat's not the expected move for this lesson." << std::endl;
+            std::cout << "\n✗ That's not the expected move for this lesson." << std::endl;
             std::cout << "Remember: " << lesson.description << std::endl;
             attempts++;
+            
+            if (attempts < maxAttempts) {
+                std::cout << "Attempts remaining: " << (maxAttempts - attempts) << std::endl;
+                if (attempts == maxAttempts - 1) {
+                    std::cout << "Hint: " << lesson.hint << std::endl;
+                }
+            }
         }
     }
     
@@ -673,6 +1140,90 @@ void Menu::runLesson(const Lesson& lesson) {
     }
 }
 
+void Menu::runFenLesson(const FenLesson& lesson) {
+    bool lessonComplete = false;
+    int attempts = 0;
+    const int maxAttempts = 3;
+    
+    while (!lessonComplete && attempts < maxAttempts) {
+        std::cout << "\n" << std::string(50, '-') << std::endl;
+        std::cout << "LESSON: " << lesson.title << std::endl;
+        std::cout << std::string(50, '-') << std::endl;
+        std::cout << lesson.description << std::endl;
+        
+        if (!lesson.exampleFen.empty()) {
+            std::cout << "\nExample FEN: " << lesson.exampleFen << std::endl;
+            std::cout << "\nCorresponding board position:" << std::endl;
+            displayBoard(lesson.exampleFen);
+        }
+        
+        std::cout << "\nQUESTION: " << lesson.question << std::endl;
+        std::cout << "Your answer (or type 'hint' for help, 'skip' to skip): ";
+        
+        std::string answer;
+        std::getline(std::cin, answer);
+        
+        // Trim whitespace from answer
+        answer.erase(0, answer.find_first_not_of(" \t\n\r"));
+        answer.erase(answer.find_last_not_of(" \t\n\r") + 1);
+        
+        // Convert to lowercase for easier comparison
+        std::string answerLower = answer;
+        std::transform(answerLower.begin(), answerLower.end(), answerLower.begin(), ::tolower);
+        
+        // Check for special commands first
+        if (answerLower == "skip") {
+            std::cout << "\nLesson skipped. The correct answer was: " << lesson.expectedAnswer << std::endl;
+            std::cout << "Press Enter to continue...";
+            std::cin.get();
+            return;
+        }
+        
+        if (answerLower == "hint") {
+            if (attempts < maxAttempts - 1) {
+                std::cout << "\nHINT: " << lesson.hint << std::endl;
+                std::cout << "Attempts remaining: " << (maxAttempts - attempts - 1) << std::endl;
+                attempts++;
+                std::cout << "\nPress Enter to try again...";
+                std::cin.get();
+                continue;
+            } else {
+                std::cout << "\nNo more hints available. Try to answer or type 'skip'." << std::endl;
+                continue;
+            }
+        }
+        
+        // Check the answer
+        if (checkFenAnswer(answer, lesson.expectedAnswer)) {
+            std::cout << "\n✓ Correct! Well done!" << std::endl;
+            lessonComplete = true;
+            
+            if (!lesson.exampleFen.empty()) {
+                std::cout << "\nReview the position:" << std::endl;
+                displayBoard(lesson.exampleFen);
+            }
+        } else {
+            std::cout << "\n✗ That's not correct." << std::endl;
+            attempts++;
+            
+            if (attempts < maxAttempts) {
+                std::cout << "Attempts remaining: " << (maxAttempts - attempts) << std::endl;
+                if (attempts == maxAttempts - 1) {
+                    std::cout << "Last chance! Hint: " << lesson.hint << std::endl;
+                }
+            }
+        }
+    }
+    
+    if (!lessonComplete) {
+        std::cout << "\nThe correct answer was: " << lesson.expectedAnswer << std::endl;
+        std::cout << "Review the lesson material and try again later." << std::endl;
+    }
+    
+    std::cout << "\nPress Enter to continue to next lesson...";
+    std::cin.get();
+}
+
 bool Menu::checkLessonMove(const std::string& move, const std::string& expected) {
     // Convert both to lowercase for comparison
     std::string moveLower = move;
@@ -681,6 +1232,46 @@ bool Menu::checkLessonMove(const std::string& move, const std::string& expected)
     std::transform(expectedLower.begin(), expectedLower.end(), expectedLower.begin(), ::tolower);
     
     return moveLower == expectedLower;
+}
+
+bool Menu::checkFenAnswer(const std::string& answer, const std::string& expected) {
+    std::string answerLower = answer;
+    std::string expectedLower = expected;
+    std::transform(answerLower.begin(), answerLower.end(), answerLower.begin(), ::tolower);
+    std::transform(expectedLower.begin(), expectedLower.end(), expectedLower.begin(), ::tolower);
+    
+    // Check for exact match
+    if (answerLower == expectedLower) {
+        return true;
+    }
+    
+    // Check for numeric answers (like "6" vs "six")
+    if (expectedLower == "6" && (answerLower == "six" || answerLower == "6")) {
+        return true;
+    }
+    
+    // Check for "white" vs "w" variations
+    if (expectedLower == "white" && (answerLower == "white" || answerLower == "w")) {
+        return true;
+    }
+    if (expectedLower == "black" && (answerLower == "black" || answerLower == "b")) {
+        return true;
+    }
+    
+    // Check for yes/no variations
+    if (expectedLower == "yes" && (answerLower == "yes" || answerLower == "y")) {
+        return true;
+    }
+    if (expectedLower == "no" && (answerLower == "no" || answerLower == "n")) {
+        return true;
+    }
+    
+    // Check for common FEN answers
+    if (expectedLower == "8/8/8/8/8/8/8/8" && answerLower == "8/8/8/8/8/8/8/8") {
+        return true;
+    }
+    
+    return false;
 }
 
 void Menu::showCustomPieceMenu() {
@@ -714,6 +1305,8 @@ void Menu::showCustomPieceMenu() {
                                   << " - " << pair.second.name << std::endl;
                     }
                 }
+                std::cout << "Press Enter to continue...";
+                std::cin.get();
                 break;
             case 4:
                 return;
@@ -771,12 +1364,16 @@ void Menu::createCustomPiece() {
     std::cout << "\nCustom piece '" << newPiece.name << "' created with symbol '" 
               << newPiece.symbol << "'!" << std::endl;
     std::cout << "Both white (uppercase) and black (lowercase) versions are available." << std::endl;
+    std::cout << "Press Enter to continue...";
+    std::cin.get();
 }
 
 void Menu::enableCustomPieces() {
     customPiecesEnabled = !customPiecesEnabled;
     std::cout << "\nCustom pieces are now " 
               << (customPiecesEnabled ? "ENABLED" : "DISABLED") << std::endl;
+    std::cout << "Press Enter to continue...";
+    std::cin.get();
 }
 
 void Menu::playLocalGame() {
@@ -813,11 +1410,15 @@ void Menu::playLocalGame() {
                     // In a real implementation, you'd update the board state
                     std::cout << "Move applied (simplified local game)." << std::endl;
                 }
+                std::cout << "Press Enter to continue...";
+                std::cin.get();
                 break;
             }
             case 2:
                 std::cout << "Local game: Basic move validation only." << std::endl;
                 std::cout << "Custom pieces are displayed but not fully validated." << std::endl;
+                std::cout << "Press Enter to continue...";
+                std::cin.get();
                 break;
             case 3:
                 currentFen = INITIAL_FEN;
@@ -828,7 +1429,6 @@ void Menu::playLocalGame() {
         }
     }
 }
-
 void Menu::run() {
     int choice;
     
@@ -841,32 +1441,38 @@ void Menu::run() {
         
         switch (choice) {
             case 1:
-                newGame();
+                playVsEngine();
                 break;
             case 2:
-                setCustomPosition();
-                playAgainstEngine();
+                playLocalPvp();
                 break;
             case 3:
-                analyzePosition();
+                setCustomPosition();
+                playLocalPvp();
                 break;
             case 4:
-                viewEngineInfo();
+                analyzePosition();
                 break;
             case 5:
-                showLessonMenu();
+                viewEngineInfo();
                 break;
             case 6:
-                showCustomPieceMenu();
+                showLessonMenu();
                 break;
             case 7:
-                playLocalGame();
+                showCustomPieceMenu();
                 break;
             case 8:
+                playLocalGame();
+                break;
+            case 9:
+                setDifficulty();
+                break;
+            case 10:
                 std::cout << "\nGoodbye!" << std::endl;
                 break;
             default:
                 std::cout << "\nInvalid choice! Please try again." << std::endl;
         }
-    } while (choice != 8);
+    } while (choice != 10);
 }

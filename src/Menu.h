@@ -25,6 +25,20 @@ private:
     bool customPiecesEnabled;
     std::map<char, CustomPiece> customPieces; // Map symbol -> piece definition
     
+    // Difficulty settings - define enum before using it
+public:
+    enum Difficulty {
+        BEGINNER = 0,
+        EASY = 5,
+        MEDIUM = 10,
+        HARD = 15,
+        EXPERT = 20
+    };
+
+private:
+    Difficulty currentDifficulty;
+    int engineMoveTimeMs; // Time in milliseconds for engine to think
+    
     // Lesson system
     struct Lesson {
         std::string title;
@@ -52,19 +66,23 @@ private:
     void displayHeader();
     void displayMainMenu();
     void displayGameMenu();
+    void displayVsEngineMenu();
     void displayLessonMenu();
     void displayFenLessonMenu();
+    void displayDifficultyMenu();
     void displayBoard(const std::string& fen);
     std::string getStockfishPath();
     
     void newGame();
-    void playAgainstEngine();
+    void playVsEngine(); // Renamed from playAgainstEngine
+    void playLocalPvp(); // New local PvP mode without engine
     void analyzePosition();
     void inputMove();
     void setCustomPosition();
     void viewEngineInfo();
+    void setDifficulty();
     
-    // New methods for lessons and custom pieces
+    // Methods for lessons and custom pieces
     void initializeLessons();
     void initializeFenLessons();
     void showLessonMenu();
