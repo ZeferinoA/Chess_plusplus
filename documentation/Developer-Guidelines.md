@@ -10,7 +10,7 @@ The layout of the repository directory starts with the items out of folders, whi
 A makefile will be provided so that with the source code downloaded. To run the makefile, just type `make` in the terminal in the directory that the source code was downloaded to. After this is ran, an executable is created with the name chess_game. To run this, simply put in the same terminal `./chess_game`
 
 ## Software Testing
-A makefile for test will be provide in order to be able to run any in the test folder. When the make file creates the executable of `./chess_test`, you can run that from the command line for the source files.
+A makefile for test will be provide in order to be able to run any in the test folder. When the make file creates the executable of `./run_test`, you can run that from the command line for the source files.
 
 ## Adding New Test
 The format to follow when adding to the testing folder will be [what its testing]_test.cpp 
