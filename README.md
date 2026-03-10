@@ -11,7 +11,7 @@ This program simulates a chess game for players of all skill levels who want to 
 
     For Advanced Players: Improve your game with deep position analysis, engine evaluation, and the ability to analyze specific positions. The program interfaces with Stockfish, one of the strongest chess engines in the world, providing professional-grade analysis.
 
-    Future Additions: The long-term goal includes creating new pieces and new ways to play, as well as local 2 player control
+    Playing against CPU with Realtime analysis functions
 
 Goal
 
