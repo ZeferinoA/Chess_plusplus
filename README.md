@@ -87,7 +87,7 @@ Non-functional Requirements: Describe at least three non-functional requirements
 Main Menu Options
 
 When you run the program, you'll see the main menu:
-text
+
 
 ==================================================
         TERMINAL CHESS ENGINE - STOCKFISH
@@ -139,7 +139,6 @@ Choice:
 Game Menu Options
 
 During active gameplay, you'll see the game menu:
-text
 
 GAME MENU:
 1. Make Move
@@ -190,7 +189,7 @@ Choice:
 Board Display
 
 The board is displayed with coordinates for easy reference:
-text
+
 
        a       b       c       d       e       f       g       h
    -----------------------------------------------------------------
