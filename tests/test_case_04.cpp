@@ -52,9 +52,11 @@ TEST_CASE("Pawn promotion", "[special]") {
     game.makeMove("b5b6");
     game.makeMove("a6a5");
     game.makeMove("b6b7");
-    game.makeMove("a8a7"); // Black rook moves aside to allow promotion 
     
-    // Promote to queen
+    //Black knight moves from b8 to c6 to empty the b8 promotion square
+    game.makeMove("b8c6"); 
+    
+    // Promote to queen safely on the now-empty b8 square
     CHECK(game.makeMove("b7b8q") == MoveResult::SUCCESS);
     CHECK(game.getPieceAt("b8") == Piece::WHITE_QUEEN);
 }
