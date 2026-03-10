@@ -16,6 +16,22 @@
 #include <unistd.h>
 #endif
 
+#include <limits>
+
+static int getSafeIntInput() {
+    int choice;
+    if (!(std::cin >> choice)) {
+        // If input wasn't an integer, clear the fail state
+        std::cin.clear(); 
+        // Throw away the garbage input up to the next newline
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); 
+        return -1; // Return an invalid option to trigger the 'default' switch cases
+    }
+    // Still ignore the trailing newline for valid inputs
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    return choice;
+}
+
 // Initial position FEN
 const std::string INITIAL_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -481,8 +497,7 @@ void Menu::setDifficulty() {
     int choice;
     do {
         displayDifficultyMenu();
-        std::cin >> choice;
-        std::cin.ignore();
+        choice = getSafeIntInput();
         
         switch (choice) {
             case 1:
@@ -594,8 +609,7 @@ void Menu::playVsEngine() {
             displayVsEngineMenu();
             
             int choice;
-            std::cin >> choice;
-            std::cin.ignore();
+            choice = getSafeIntInput();
             
             switch (choice) {
                 case 1: {
@@ -701,8 +715,7 @@ void Menu::playLocalPvp() {
         displayGameMenu();
         
         int choice;
-        std::cin >> choice;
-        std::cin.ignore();
+        choice = getSafeIntInput();
         
         switch (choice) {
             case 1:
@@ -951,8 +964,7 @@ void Menu::showLessonMenu() {
     int choice;
     do {
         displayLessonMenu();
-        std::cin >> choice;
-        std::cin.ignore();
+        choice = getSafeIntInput();
         
         switch (choice) {
             case 1:
@@ -1285,8 +1297,7 @@ void Menu::showCustomPieceMenu() {
         std::cout << "4. Back to Main Menu" << std::endl;
         std::cout << "Choice: ";
         
-        std::cin >> choice;
-        std::cin.ignore();
+        choice = getSafeIntInput();
         
         switch (choice) {
             case 1:
@@ -1337,8 +1348,7 @@ void Menu::createCustomPiece() {
     std::cout << "6. Pawn (forward one, captures diagonal)" << std::endl;
     
     int patternChoice;
-    std::cin >> patternChoice;
-    std::cin.ignore();
+    patternChoice = getSafeIntInput();
     
     std::vector<std::string> patterns;
     switch (patternChoice) {
@@ -1394,8 +1404,7 @@ void Menu::playLocalGame() {
         std::cout << "Choice: ";
         
         int choice;
-        std::cin >> choice;
-        std::cin.ignore();
+        choice = getSafeIntInput();
         
         switch (choice) {
             case 1: {
@@ -1436,8 +1445,7 @@ void Menu::run() {
         displayHeader();
         displayMainMenu();
         
-        std::cin >> choice;
-        std::cin.ignore();
+        choice = getSafeIntInput();
         
         switch (choice) {
             case 1:
