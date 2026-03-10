@@ -48,7 +48,8 @@ Required Software
 
     Make: Build automation tool
 
-    Stockfish Chess Engine: Already included in the stockfish/ directory
+    IMPORTANT Stockfish Chess Engine: Already included in the stockfish/ directory, if you want a more current version please download and compile stockfish from 
+    https://github.com/official-stockfish/Stockfish
 
 ## Quick Start
 in Chess_plusplus directory use:
