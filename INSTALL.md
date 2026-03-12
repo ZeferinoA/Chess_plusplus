@@ -1,3 +1,8 @@
+The releases page can be found at: https://github.com/ZeferinoA/Chess_plusplus/releases/tag/release
+Download the zip file and unzip from that link and follow setup instructions for release version
+
+## alternate steps for self-compilation
+
 In order to install the CLI and compile, the following dependencies are required:
 - G++ compiler
 - Make
