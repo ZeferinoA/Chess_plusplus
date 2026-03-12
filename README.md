@@ -1,3 +1,9 @@
+
+FOR INSTALLATION INSTRUCTIONS: 
+https://github.com/ZeferinoA/Chess_plusplus/blob/main/INSTALL.md
+FOR SETUP INSTRUCTIONS:
+https://github.com/ZeferinoA/Chess_plusplus/blob/main/SETUP.md
+
 Chess++
 Terminal Based Chess Implementation
 
